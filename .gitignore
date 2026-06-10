@@ -1,0 +1,9 @@
+node_modules/
+dist*/
+gh-cli/
+gh.zip
+*.zip
+*.7z
+UsersdelgaAppDataLocalelectron-builderCachewinCodeSignwcs/
+gh-cli/
+package-lock.json

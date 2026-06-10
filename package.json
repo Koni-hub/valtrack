@@ -1,0 +1,54 @@
+{
+  "name": "valtrack",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "node server.js",
+    "electron": "electron .",
+    "build": "electron-builder --win portable --x64",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "build": {
+    "appId": "com.valtrack.app",
+    "productName": "ValTrack",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "server.js",
+      "valorant-track-acc.html",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": null,
+      "signAndEditExecutable": false
+    }
+  },
+  "keywords": [
+    "valorant",
+    "tracker",
+    "valtrack"
+  ],
+  "author": "",
+  "license": "ISC",
+  "description": "Valorant account tracker with auto-detection via Riot lockfile",
+  "dependencies": {
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}
