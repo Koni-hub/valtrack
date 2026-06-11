@@ -41,7 +41,7 @@
   ],
   "author": "",
   "license": "ISC",
-  "description": "Valorant account tracker with auto-detection via Riot lockfile",
+  "description": "Valorant account tracker with auto-detection via Riot client",
   "dependencies": {
     "express": "^5.2.1",
     "socket.io": "^4.8.3",
