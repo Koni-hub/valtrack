@@ -1415,10 +1415,33 @@
           return;
         }
 
-        errEl.textContent = "";
+        errEl.textContent = "▸ CHECKING...";
+
+        if (socket && socket.connected) {
+          socket.emit("check-session", { username });
+          socket.once("session-status", (res) => {
+            if (res.available) {
+              proceedLogin(username);
+            } else {
+              const info = [res.ip, res.device].filter(Boolean).join(" — ");
+              errEl.textContent = `⚠ THIS ACCOUNT IS ALREADY IN USE ON ANOTHER PC${info ? " (" + info + ")" : ""}`;
+            }
+          });
+        } else {
+          proceedLogin(username);
+        }
+      }
+
+      function proceedLogin(username) {
+        document.getElementById("loginError").textContent = "";
         sessionStorage.setItem("logged_in", "true");
         sessionStorage.setItem("username", username);
         enterSession(username);
+        if (socket && socket.connected) {
+          const ip = sessionStorage.getItem("user_ip") || "";
+          const device = navigator.userAgent || "";
+          socket.emit("register-session", { username, ip, device });
+        }
       }
 
       function enterSession(username) {
@@ -1603,6 +1626,12 @@
 
         socket.on("connect", () => {
           syncAll();
+          const myUser = sessionStorage.getItem("username");
+          if (myUser) {
+            const ip = sessionStorage.getItem("user_ip") || "";
+            const device = navigator.userAgent || "";
+            socket.emit("register-session", { username: myUser, ip, device });
+          }
         });
 
         socket.on("log", (entry) => {
@@ -1611,35 +1640,44 @@
 
         socket.on("valo-detect", (data) => {
           const myUser = sessionStorage.getItem("username");
-          const users = getPlayingUsers();
+          if (!myUser) return;
 
-          if (data.account && myUser) {
+          const allUsers = getPlayingUsers();
+          let users = allUsers.filter(u => u.username !== myUser);
+
+          if (data.account) {
             const { name, tag } = data.account;
-            const existing = users.findIndex(u => u.accountName === name && u.accountTag === tag);
 
-            if (existing >= 0) {
-              const claim = users[existing];
-              if (claim.username === myUser) {
-                claim.lastHeartbeat = Date.now();
+            // Check if another user has a fresh claim on this account
+            const otherClaim = allUsers.find(
+              u => u.accountName === name && u.accountTag === tag && u.username !== myUser
+            );
+            if (otherClaim) {
+              if (Date.now() - (otherClaim.lastHeartbeat || otherClaim.startTime) <= STALE_MS) {
                 setPlayingUsers(users);
-              } else if (Date.now() - (claim.lastHeartbeat || claim.startTime) > STALE_MS) {
-                users.splice(existing, 1);
-                users.push({
-                  username: myUser, accountName: name, accountTag: tag,
-                  startTime: Date.now(), lastHeartbeat: Date.now(),
-                });
-                setPlayingUsers(users);
+                syncAll();
+                return;
               }
+            }
+
+            // Preserve existing claim (keep original startTime so timer doesn't reset)
+            const myExisting = allUsers.find(
+              u => u.username === myUser && u.accountName === name && u.accountTag === tag
+            );
+            if (myExisting) {
+              myExisting.lastHeartbeat = Date.now();
+              users.push(myExisting);
             } else {
               users.push({
                 username: myUser, accountName: name, accountTag: tag,
                 startTime: Date.now(), lastHeartbeat: Date.now(),
               });
-              setPlayingUsers(users);
             }
-          } else if (!data.account && myUser) {
-            const updated = users.filter(u => u.username !== myUser);
-            setPlayingUsers(updated);
+
+            setPlayingUsers(users);
+          } else {
+            // No account detected — clear my claim
+            setPlayingUsers(users);
           }
 
           syncAll();
@@ -1663,6 +1701,9 @@
         if (myUser) {
           const users = getPlayingUsers().filter(u => u.username !== myUser);
           setPlayingUsers(users);
+          if (socket && socket.connected) {
+            socket.emit("release-session", { username: myUser });
+          }
         }
         origHandleLogout();
       };
@@ -1673,11 +1714,26 @@
       }
 
       // Check session on load
-      (function() {
+      (async function() {
         if (sessionStorage.getItem("logged_in") === "true") {
           const user = sessionStorage.getItem("username");
           if (user && USERS[user]) {
-            enterSession(user);
+            // Wait for socket to connect, then verify session with server
+            await new Promise(r => setTimeout(r, 500));
+            if (socket && socket.connected) {
+              socket.emit("check-session", { username: user });
+              socket.once("session-status", (res) => {
+                if (res.available) {
+                  enterSession(user);
+                } else {
+                  handleLogout();
+                  document.getElementById("loginError").textContent =
+                    "⚠ YOUR SESSION WAS ENDED — ACCOUNT IN USE ON ANOTHER PC";
+                }
+              });
+            } else {
+              enterSession(user);
+            }
           }
         }
       })();

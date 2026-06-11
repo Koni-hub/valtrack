@@ -29,6 +29,7 @@ let detectedAccount = null;
 let gameState = null;
 let io = null;
 let trackedPuuidMap = {};
+let activeSessions = new Map();
 
 // ===== LOG SYSTEM =====
 const logs = [];
@@ -215,6 +216,38 @@ io.on("connection", (socket) => {
   socket.emit("valo-detect", {
     account: detectedAccount,
     gameState,
+  });
+
+  // ===== SESSION MANAGEMENT =====
+  socket.on("check-session", ({ username }) => {
+    const existing = activeSessions.get(username);
+    if (existing && existing.socketId !== socket.id) {
+      socket.emit("session-status", { available: false, ip: existing.ip, device: existing.device });
+    } else {
+      socket.emit("session-status", { available: true });
+    }
+  });
+
+  socket.on("register-session", ({ username, ip, device }) => {
+    activeSessions.set(username, { socketId: socket.id, ip, device, timestamp: Date.now() });
+    log("ok", "Session registered: " + username + " (" + (ip || "unknown") + ")");
+  });
+
+  socket.on("release-session", ({ username }) => {
+    if (activeSessions.has(username)) {
+      activeSessions.delete(username);
+      log("info", "Session released: " + username);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    for (const [username, data] of activeSessions) {
+      if (data.socketId === socket.id) {
+        activeSessions.delete(username);
+        log("warn", "Session cleaned up (disconnect): " + username);
+        break;
+      }
+    }
   });
 });
 
